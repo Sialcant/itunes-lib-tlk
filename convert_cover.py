@@ -28,8 +28,10 @@ music_formats = ['.aac', '.aiff', '.dsf', '.flac',
                  '.m4a', '.mp3', '.ogg', '.opus',
                  '.wav', '.wv']
 
-image_formats = ['.JPG','.jpg','.PNG''.png']
+music_formats += [format.upper() for format in music_formats]
 
+image_formats = ['.jpg','.jpeg','.png']
+image_formats += [format.upper() for format in image_formats]
 
 def extract_tags(song_tag,
                  music_dir):

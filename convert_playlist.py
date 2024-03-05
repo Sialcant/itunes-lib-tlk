@@ -2,13 +2,12 @@
 
 import os
 import unicodedata
-import sys
 
 ##########################
 # EDIT THE 2 LINES BELOW #
 ##########################
 iTunes_lib_path = 'file:///Volumes/MasterDD/Audios/Gros iTunes/'
-path_to_playlists = '/Users/antoine/Projects/itunes-lib-tlk/playlists/'
+path_to_playlists = '/Projects/itunes-lib-tlk/playlists/'
 ##########################
 #                        #
 ##########################
@@ -18,31 +17,30 @@ walkman_lib_path = '/Volumes/MasterAudio/Audio/Gros iTunes/'
 #the possible norms ar ‘NFC’, ‘NFKC’, ‘NFD’, and ‘NFKD’.
 norm = 'NFC'
 
-destination_path = path_to_playlists+'/Playlists_WM'
+def convert_playlists(path_to_playlists,
+                      destination_folder = 'Playlists_WM',
+                      walkman_lib_path = '/Volumes/MasterAudio/Audio/Gros iTunes/'):
 
-if 'Playlists_WM' not in os.listdir(path_to_playlists):
-    os.mkdir(destination_path)
+    if destination_folder not in os.listdir(path_to_playlists):
+        os.mkdir(os.path.join(path_to_playlists,destination_folder))
 
+    destination_path = os.path.join(path_to_playlists,destination_folder)
 
-
-files_list = [f for f in os.listdir(path_to_playlists) if (f.endswith('.m3u8')
+    files_list = [f for f in os.listdir(path_to_playlists) if (f.endswith('.m3u8')
                                              and not f.startswith('._'))]
 
-for file_name in files_list:
-    print(file_name)
+    for file_name in files_list:
+        print(file_name)
 
-    playlist_file = open(path_to_playlists+'/'+file_name)
-    lines = playlist_file.readlines()
-    playlist_file.close()
-    #print('*********** ', file_name)
-    target_file_name = file_name#.split('.')[0]+walkman_suffix+norm+'.m3u8'
-    f = open(destination_path+'/'+target_file_name, "w")
+        playlist_file = open(os.path.join(path_to_playlists,file_name))
+        lines = playlist_file.readlines()
+        playlist_file.close()
 
-    for line in lines:
-        line = line.replace(iTunes_lib_path, walkman_lib_path)
-        #print(line.encode("utf-8"))
-        #print(line.decode("utf-8", "strict"))
-        #print(unicodedata.normalize(norm, line).encode("utf-8"))
-        f.write((unicodedata.normalize(norm, line).encode("utf-8")).decode("utf-8"))
+        target_file_name = file_name
+        f = open(os.path.join(destination_path,target_file_name), "w")
 
-    f.close()
+        for line in lines:
+            line = line.replace(iTunes_lib_path, walkman_lib_path)
+            f.write((unicodedata.normalize(norm, line).encode("utf-8")).decode("utf-8"))
+
+        f.close()

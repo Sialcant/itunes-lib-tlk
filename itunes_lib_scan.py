@@ -13,35 +13,7 @@ import datetime
 
 import pickle 
 
-
-important_cols = ['Track ID', 
-                  'Name', 
-                  'Artist', 
-                  'Album Artist',
-                  'Album', 
-                  'Artwork Count',
-                  'Composer',
-                  'Compilation',
-                  'Genre', 
-                  'Kind', 
-                  'Size', 
-                  'Total Time', 
-                  'Disc Number',
-                  'Disc Count', 
-                  'Bit Rate', 
-                  'Sample Rate',
-                  'Track Number', 
-                  'Track Count', 
-                  'Year',
-                  'File Type', 
-                  'Location',
-                  'Scoring']
-
-tags_to_itunes_cols_dict = {'Total Discs' : 'Disc Count',
-                           'Total Tracks' : 'Track Count',
-                           'Track Title' : 'Name',
-                           '#Length' : 'Total Time',
-                           '#codec' : 'File Type'}
+import parameters as param
 
 
 grand_genre = ['Chant','Classique','Électro',
@@ -394,7 +366,7 @@ class LibScan:
             
             if self.df_lib == None:
             
-                self.df_lib = self.df_lib_scanned.rename(columns = tags_to_itunes_cols_dict)
+                self.df_lib = self.df_lib_scanned.rename(columns = param.tags_to_itunes_cols_dict)
 
             
         self.df_lib, self.df_cd  = get_cd_df(self.df_cd,

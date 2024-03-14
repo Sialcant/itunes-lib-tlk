@@ -346,6 +346,7 @@ class LibScan:
 
     def __init__(self,
                 path_to_library_file=None,
+                path_to_dest_folder = None,
                 path_to_music_folder=None,
                 force_scan = False,
                 create_cover_jpg = True,
@@ -354,8 +355,10 @@ class LibScan:
                 convert_to_non_prog = True,
                 skip_scanning = True ):
         
-
-        self.path_to_dest_folder= os.path.join(os.path.dirname(os.getcwd() ),'itunes-lib-data')
+        if path_to_dest_folder != None:
+            self.path_to_dest_folder = path_to_dest_folder
+        else:
+            self.path_to_dest_folder= os.path.join(os.path.dirname(os.getcwd() ),'itunes-lib-data')
 
         if 'itunes-lib-data' not in os.listdir(os.path.join(os.path.dirname(os.getcwd()))):
             os.mkdir(self.path_to_dest_folder)

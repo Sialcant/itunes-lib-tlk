@@ -321,7 +321,7 @@ def get_scanned_df(music_lib_path,
 
     files = os.listdir(path_to_dest_folder)
 
-    scanned_files = sorted([f for f in files if f.endswith(f'{str(datetime.datetime.now().date)}_music_lib_scan.csv')])
+    scanned_files = sorted([f for f in files if f.endswith(f'{str(datetime.datetime.now().date())}_music_lib_scan.csv')])
                                                  
     if len(scanned_files)>0 and not force_scan:
         df_lib_scanned = pd.read_csv(os.path.join(path_to_dest_folder,scanned_files[-1]))
@@ -335,7 +335,7 @@ def get_scanned_df(music_lib_path,
                                                           complete_missing_cover_art = complete_missing_cover_art,
                                                           convert_to_non_prog = convert_to_non_prog)
         
-        df_lib_scanned.to_csv(os.path.join(path_to_dest_folder,f'{str(datetime.datetime.now().date)}_music_lib_scan.csv'))
+        df_lib_scanned.to_csv(os.path.join(path_to_dest_folder,f'{str(datetime.datetime.now().date())}_music_lib_scan.csv'))
         
     return df_lib_scanned
 
@@ -460,14 +460,14 @@ class LibScan:
 
         def group_by_location(x):
             
-            return pd.Series({'Number of Album in Location': len(x.Album.unque())})
+            return pd.Series({'Number of Album in Location': len(x.Album.unique())})
 
 
         grouped_df = self.df_lib.groupby(by='Album Location').apply(group_by_location).reset_index()
 
         self.df_cd = pd.merge(self.df_cd, grouped_df, on='Album',how = 'left')
 
-        self.df_cd[self.df_cd['Number of Album in Location']>1].to_csv(os.path.join(self.csv_loc,
+        self.df_cd[self.df_cd['Number of Album in Location']>1].to_csv(os.path.join(self.path_to_dest_folder,
                                                                                     'locations_with_multiple_album.csv',index=False))
 
 

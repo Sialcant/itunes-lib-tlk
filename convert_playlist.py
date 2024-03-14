@@ -3,23 +3,14 @@
 import os
 import unicodedata
 
-##########################
-# EDIT THE 2 LINES BELOW #
-##########################
-iTunes_lib_path = 'file:///Volumes/MasterDD/Audios/Gros iTunes/'
-path_to_playlists = '/Projects/itunes-lib-tlk/playlists/'
-##########################
-#                        #
-##########################
-
-walkman_lib_path = '/Volumes/MasterAudio/Audio/Gros iTunes/'
 
 #the possible norms ar ‘NFC’, ‘NFKC’, ‘NFD’, and ‘NFKD’.
 norm = 'NFC'
 
 def convert_playlists(path_to_playlists,
                       destination_folder = 'Playlists_WM',
-                      walkman_lib_path = '/Volumes/MasterAudio/Audio/Gros iTunes/'):
+                      iTunes_lib_path = 'file:///Volumes/MasterDD/Audios/Gros iTunes/',
+                      walkman_lib_path = '/Volumes/MasterAudio/Audio/iTunes/'):
 
     if destination_folder not in os.listdir(path_to_playlists):
         os.mkdir(os.path.join(path_to_playlists,destination_folder))
@@ -40,7 +31,7 @@ def convert_playlists(path_to_playlists,
         f = open(os.path.join(destination_path,target_file_name), "w")
 
         for line in lines:
-            line = line.replace(iTunes_lib_path, walkman_lib_path)
+            line = str(os.path.join(walkman_lib_path,line.split(iTunes_lib_path)[-1]))
             f.write((unicodedata.normalize(norm, line).encode("utf-8")).decode("utf-8"))
 
         f.close()

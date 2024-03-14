@@ -5,6 +5,7 @@ import music_tag
 import pandas as pd
 import shutil
 
+import parameters as param
 
 
 def find_all_paths(music_lib_path):
@@ -37,9 +38,11 @@ def extract_tags(song_tag,
                  song_path):
 
     result_dict = {}
-    for feature in song_tag.keys():
-
-        result_dict[feature] = str(song_tag[feature])
+    for feature in param.tag_keys:
+        try:
+            result_dict[feature] = str(song_tag[feature])
+        except:
+            result_dict[feature] = None
 
     result_dict['Location'] = song_path
     return result_dict
@@ -71,13 +74,13 @@ def exctract_artwork(song_path,
             art_data = song_tag['artwork'].first.data
             image = Image.open(io.BytesIO(art_data))
             try:
-                image.save(os.join.path(os.path.dirname(song_path),
+                image.save(os.path.join(os.path.dirname(song_path),
                                         'non_prog_temp.jpg'),"JPEG",
                             quality=80, optimize=True, 
                             progressive=False)
             except:
                 image = image.convert('RGB')
-                image.save(os.join.path(os.path.dirname(song_path),
+                image.save(os.path.join(os.path.dirname(song_path),
                                         'non_prog_temp.jpg'),"JPEG",
                                 quality=80, optimize=True,
                                   progressive=False)
@@ -145,7 +148,7 @@ def loop_over_a_music_path(music_lib_path = '/Volumes/MasterAudio/Audio/',
     paths_to_music = find_all_paths(music_lib_path)
 
 
-    music_lib_df = pd.DataFrame([])
+    music_lib_list = []
 
     for music_dir in paths_to_music:
 
@@ -156,7 +159,7 @@ def loop_over_a_music_path(music_lib_path = '/Volumes/MasterAudio/Audio/',
 
         album_title = music_dir.split('/')[-1]
 
-        is_any_cover_image = len(image_files)>0
+        is_any_cover_image = len(image_files_paths)>0
     
 
         #@todo find empty music folders
@@ -173,12 +176,12 @@ def loop_over_a_music_path(music_lib_path = '/Volumes/MasterAudio/Audio/',
                 image=image.read()
                 image = Image.open(io.BytesIO(image))
                 try:
-                    image.save(os.join.path(music_dir,
+                    image.save(os.path.join(music_dir,
                                         'non_prog_temp.jpg'),"JPEG",
                                 quality=80, optimize=True, progressive=False)
                 except:
                     image = image.convert('RGB')
-                    image.save(os.join.path(music_dir,
+                    image.save(os.path.join(music_dir,
                                         'non_prog_temp.jpg'),"JPEG",
                                     quality=80, optimize=True, progressive=False)
 
@@ -195,8 +198,7 @@ def loop_over_a_music_path(music_lib_path = '/Volumes/MasterAudio/Audio/',
 
             tags_dict = extract_tags(song_tag,song_path)
 
-            music_lib_df = pd.concat(music_lib_df,
-                                     pd.Series(tags_dict), ignore_index=True)
+            music_lib_list.append(tags_dict)
 
 
         if convert_to_non_prog and is_any_cover_image:
@@ -207,26 +209,29 @@ def loop_over_a_music_path(music_lib_path = '/Volumes/MasterAudio/Audio/',
 
             assign_non_prog_artwork_to_song_list(music_dir,songs_wo_artwork_paths)
 
-        image_files = get_images_files_paths(music_dir)
+        image_files_paths = get_images_files_paths(music_dir)
 
-        if 'non_prog_temp.jpg' in image_files:
+        if os.path.join(music_dir,'non_prog_temp.jpg') in image_files_paths:
             if create_cover_jpg:
-                shutil.copyfile(os.join.path(music_dir,'non_prog_temp.jpg'),
-                                os.join.path(music_dir,'cover.jpg'))
+                shutil.copyfile(os.path.join(music_dir,'non_prog_temp.jpg'),
+                                os.path.join(music_dir,'cover.jpg'))
             if create_album_jpg:
 
-                shutil.copyfile(os.join.path(music_dir,'non_prog_temp.jpg'), 
-                                os.join.path(music_dir,f'{album_title}.jpg'))
+                shutil.copyfile(os.path.join(music_dir,'non_prog_temp.jpg'), 
+                                os.path.join(music_dir,f'{album_title}.jpg'))
 
-            os.remove(os.join.path(music_dir,'non_prog_temp.jpg'))
+            os.remove(os.path.join(music_dir,'non_prog_temp.jpg'))
 
         elif songs_wo_artwork_paths:
             print('**** Album wo artwork: ', music_dir)
+
+    music_lib_df  = pd.DataFrame(music_lib_list)
+            
     return music_lib_df
 
 
-loop_over_a_music_path(music_lib_path = '/Volumes/MasterAudio/Audio/',
-                       create_cover_jpg = True,
-                       create_album_jpg = True,
-                       complete_missing_cover_art = True,
-                       convert_to_non_prog = True)
+#loop_over_a_music_path(music_lib_path = '/Volumes/MasterAudio/Audio/',
+#                       create_cover_jpg = True,
+#                       create_album_jpg = True,
+#                       complete_missing_cover_art = True,
+#                       convert_to_non_prog = True)

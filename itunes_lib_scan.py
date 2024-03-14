@@ -9,6 +9,8 @@ from urllib.parse import unquote
 from convert_cover import loop_over_a_music_path
 from convert_playlist import convert_playlists
 
+from convertion_functions import m3u8_to_csv,df_to_m3u8,PL_to_m3u8
+
 import datetime
 
 import pickle 
@@ -22,7 +24,9 @@ grand_genre = ['Chant','Classique','Électro',
                ]
 
 
-def get_lib_as_lib(path_to_lib_folder,lib_name):
+def get_lib_as_lib(path_to_lib_folder,
+                   lib_name,
+                   path_to_dest_folder):
     """_summary_
 
     Args:
@@ -36,16 +40,18 @@ def get_lib_as_lib(path_to_lib_folder,lib_name):
     lib_name = f'{lib_name}.xml'
     pkl_name = f'{lib_name}.pickle'
     
-    if pkl_name in os.listdir(path_to_lib_folder):
+    if pkl_name in os.listdir(path_to_dest_folder):
 
-        with open(os.path.join(path_to_lib_folder,pkl_name), 'rb') as handle:
+        with open(os.path.join(path_to_dest_folder,
+                               pkl_name), 'rb') as handle:
+            
             lib = pickle.load(handle)
     else:
         # must first parse...
-        print('! Be Patient this will take a long time !')
+        print(f'! Be Patient. Parsing your {lib_name} will take a long time (~60mins for a 30k songs lib with a Mac mini M2) !')
         lib = library.parse(os.path.join(path_to_lib_folder,lib_name))
 
-        with open(os.path.join(path_to_lib_folder,pkl_name), 'wb') as handle:
+        with open(os.path.join(path_to_dest_folder,pkl_name), 'wb') as handle:
             pickle.dump(lib, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
     return lib
@@ -151,7 +157,7 @@ def get_lib_as_csv(path_to_lib_folder,lib_name):
         df_lib = pd.read_csv(os.path.join(path_to_lib_folder,csv_name))
     else:
         # must first parse...
-        print('! Be Patient this will take a long time !')
+        print('! Be Patient this will take a few seconds !')
         df_lib =  convert_lib_to_csv(path_to_lib_folder,
                                         lib_name)
         
@@ -189,14 +195,21 @@ def group_by_cd(x):
     max_track = np.max(x[ 'Track Number'])
     track_num_delta = max_track+1 - min_track
     all_track_present = (track_num_delta == num_track)
-    album_type = todo
+    album_type = x.Kind.mode()[0]
+
+    album_location = x[ 'Album Location'].mode()[0]
+    album_multi_location = len(x[ 'Album Location'].unique())>0
+
+
 
     return pd.Series({'Album Total Time': total_duration,
                        'Album Size' : size,
                        'Album Scoring' :scoring ,
                        'Album Scoring Int' :int_scoring ,
                        'Album Bit Rate' :mean_bit_rate,
-                       'Album File Type': album_type,
+                       'Album Files Kind': album_type,
+                       'Album Location' : album_location,
+                       'Album Has Multiple Locations' : album_multi_location,
                        'Num Tracks' : num_track,
                        'Min Track Number' :min_track,
                        'Max Track Number' :max_track,
@@ -293,27 +306,36 @@ def get_cd_df(df_lib,
     #grouped_df.loc[:,'cumsum_time'] = np.cumsum((grouped_df.loc[:,'Total Time']/1000)/(4*60*60))
 
     df_lib = df_lib.merge(grouped_df, on=group_features)
-    df_lib.loc[:'Album Location'] = df_lib.loc[:'Location'].apply(lambda x: os.path.dirname(x))
+    #df_lib.loc[:,'Album Location'] = df_lib.loc[:,'Location'].apply(lambda y: os.path.dirname(y))
 
     return df_lib,grouped_df
 
 
-def get_scanned_df(music_lib_path,force_scan):
+def get_scanned_df(music_lib_path,
+                   path_to_dest_folder,
+                   force_scan,
+                   create_cover_jpg ,
+                   create_album_jpg,
+                   complete_missing_cover_art,
+                     convert_to_non_prog):
 
-    files = os.listdir(music_lib_path)
+    files = os.listdir(path_to_dest_folder)
 
-    scanned_files = sorted([f for f in files if f.endswith('music_lib_scan.csv')])
+    scanned_files = sorted([f for f in files if f.endswith(f'{str(datetime.datetime.now().date)}_music_lib_scan.csv')])
                                                  
     if len(scanned_files)>0 and not force_scan:
-        df_lib_scanned = pd.read_csv(os.path.join(music_lib_path),scanned_files[-1])
+        df_lib_scanned = pd.read_csv(os.path.join(path_to_dest_folder,scanned_files[-1]))
     else:
-        df_lib_scanned = loop_over_a_music_path(music_lib_path = music_lib_path,
-                                                          create_cover_jpg = True,
-                                                          create_album_jpg = True,
-                                                          complete_missing_cover_art = True,
-                                                          convert_to_non_prog = True)
+
+        print(f'! Be Patient. Scanning all the music your {music_lib_path} will take a long time (~15mins for a 30k songs lib with a Mac mini M2) !')
         
-        df_lib_scanned.to_csv(os.path.join(music_lib_path,f'{str(datetime.now())}_music_lib_scan.csv'))
+        df_lib_scanned = loop_over_a_music_path(music_lib_path = music_lib_path,
+                                                          create_cover_jpg = create_cover_jpg,
+                                                          create_album_jpg = create_album_jpg,
+                                                          complete_missing_cover_art = complete_missing_cover_art,
+                                                          convert_to_non_prog = convert_to_non_prog)
+        
+        df_lib_scanned.to_csv(os.path.join(path_to_dest_folder,f'{str(datetime.datetime.now().date)}_music_lib_scan.csv'))
         
     return df_lib_scanned
 
@@ -323,66 +345,92 @@ def get_scanned_df(music_lib_path,force_scan):
 class LibScan:
 
     def __init__(self,
-                lib_name=None,
+                path_to_library_file=None,
                 path_to_music_folder=None,
-                path_to_lib_folder= os.path.join(os.path.dirname(os.getcwd() ),'itunes-lib-data'),
                 force_scan = False,
-                ):
+                create_cover_jpg = True,
+                create_album_jpg = True,
+                complete_missing_cover_art = True,
+                convert_to_non_prog = True,
+                skip_scanning = True ):
         
-        if path_to_lib_folder != None:
-            self.path_to_lib_folder = path_to_lib_folder
-        if lib_name != None:
-            self.lib_name = lib_name
+
+        self.path_to_dest_folder= os.path.join(os.path.dirname(os.getcwd() ),'itunes-lib-data')
+
+        if 'itunes-lib-data' not in os.listdir(os.path.join(os.path.dirname(os.getcwd()))):
+            os.mkdir(self.path_to_dest_folder)
+
+        self.create_cover_jpg = create_cover_jpg
+        self.create_album_jpg = create_album_jpg
+        self.complete_missing_cover_art = complete_missing_cover_art
+        self.convert_to_non_prog = convert_to_non_prog
+        
+        if path_to_library_file != None:
+            self.path_to_library_file = path_to_library_file
+            self.path_to_library_folder = os.path.dirname(self.path_to_library_file)
+            self.lib_name = os.path.basename(self.path_to_library_file)
+
         if path_to_music_folder != None:
             self.path_to_music_folder = path_to_music_folder
 
-        if (path_to_lib_folder != None
-            and lib_name != None) :
+        if self.path_to_library_file != None:
 
-            self.path_to_playlists_folder = os.path.join(path_to_lib_folder,
-                                           f'{lib_name}_Playlists')
+            self.path_to_playlists_folder = os.path.join(self.path_to_dest_folder,
+                                           f'{self.lib_name}_Playlists')
             
-            if f'{lib_name}_Playlists' not in os.listdir(path_to_lib_folder):
+            if f'{self.lib_name}_Playlists' not in os.listdir(self.path_to_dest_folder):
                 os.mkdir(self.path_to_playlists_folder)
         
-            self.lib_lib = get_lib_as_lib(self.path_to_lib_folder,
-                                          self.lib_name)
+            self.lib_lib = get_lib_as_lib(self.path_to_library_folder,
+                                          self.lib_name,
+                                          self.path_to_dest_folder
+                                          )
             
-            self.df_lib = get_lib_as_csv(self.path_to_lib_folder,
+            self.df_lib = get_lib_as_csv(self.path_to_library_folder,
                                          self.lib_name)
+            
+            self.df_lib.loc[:,'Album Location'] = self.df_lib.loc[:,'Location'].apply(lambda x :os.path.dirname(x))
+                                                                                    
+
 
             self.album_paths = sorted(set(self.df_lib.loc[:,'Album Location']))
         else:
             self.lib_lib = None
+            self.df_lib = pd.DataFrame([])
             self.path_to_playlists_folder = os.path.join(path_to_music_folder,
                                            f'Playlists')
             
             if f'Playlists' not in os.listdir(path_to_music_folder):
                 os.mkdir(self.path_to_playlists_folder)
 
-        if path_to_music_folder != None:
+        if path_to_music_folder != None and not skip_scanning :
 
-            self.df_lib_scanned = get_scanned_df(path_to_music_folder,force_scan)
+            print(' ! Warning this part is going to modify your music files !')
+
+
+            self.df_lib_scanned = get_scanned_df(path_to_music_folder,
+                                                 self.path_to_dest_folder,                                                 
+                                                 force_scan,
+                                                 create_cover_jpg = self.create_cover_jpg,
+                                                create_album_jpg = self.create_album_jpg,
+                                                complete_missing_cover_art = self.complete_missing_cover_art,
+                                                    convert_to_non_prog = self.convert_to_non_prog)
             
-            if self.df_lib == None:
+            if self.df_lib.empty:
             
                 self.df_lib = self.df_lib_scanned.rename(columns = param.tags_to_itunes_cols_dict)
 
             
-        self.df_lib, self.df_cd  = get_cd_df(self.df_cd,
+        self.df_lib, self.df_cd  = get_cd_df(self.df_lib,
                                              lib_lib = self.lib_lib,
-                                             path_to_lib  = self.path_to_lib_folder)
-        
-        if path_to_lib_folder != None:
-            self.df_cd.to_csv(os.path.join(self.path_to_lib_folder,f'{self.lib_name}_CDs.csv'))
-        elif path_to_music_folder != None:
-            self.df_cd.to_csv(os.path.join(self.path_to_music_folder,f'{self.lib_name}_CDs.csv'))
-
-
+                                             path_to_lib  = self.path_to_dest_folder)
+           
+        self.df_cd.to_csv(os.path.join(self.path_to_dest_folder,f'{self.lib_name}_CDs.csv'))
 
         
     def get_all_playlists_from_a_lib(self):
         """_summary_
+
 
         Args:
             path_to_lib_folder (_type_): _description_
@@ -391,7 +439,7 @@ class LibScan:
         if self.lib_lib !=None:
             for playlist in self.lib_lib.playlists:
             #if '*' in  playlist.itunesAttributes['Name']:
-                print("PL ", playlist.itunesAttributes['Name'])
+                #print("PL ", playlist.itunesAttributes['Name'])
                 PL_to_m3u8(self.path_to_playlists_folder,
                            playlist) 
 
@@ -400,8 +448,32 @@ class LibScan:
                                                 new_root_folder):
 
         self.get_all_playlists_from_a_lib()
-        convert_playlists(self.path_to_playlists_folder,
-                          walkman_lib_path= new_root_folder)
+        if self.path_to_music_folder !=None:
+            convert_playlists(path_to_playlists = self.path_to_playlists_folder,
+                            destination_folder = 'Playlists_WM',
+                            iTunes_lib_path = self.path_to_music_folder,
+                            walkman_lib_path= new_root_folder)
+
+
+
+    def get_locations_with_multiple_album(self):
+
+        def group_by_location(x):
+            
+            return pd.Series({'Number of Album in Location': len(x.Album.unque())})
+
+
+        grouped_df = self.df_lib.groupby(by='Album Location').apply(group_by_location).reset_index()
+
+        self.df_cd = pd.merge(self.df_cd, grouped_df, on='Album',how = 'left')
+
+        self.df_cd[self.df_cd['Number of Album in Location']>1].to_csv(os.path.join(self.csv_loc,
+                                                                                    'locations_with_multiple_album.csv',index=False))
+
+
+
+
+
 
     def split_lib_by_features(self,
                 split_type = ['Genre','Album Scoring',],
@@ -553,213 +625,49 @@ class LibScan:
             file_name = f'{format}_files'
             df_to_m3u8(df,file_name, self.path_to_playlists_folder)
 
-
-    def split_lib_by_format(self):
-            
-            for res in resolutions:
-                res
-
-    def find_album_with_missing_songs(self):
+    #find_album_with_missing_songs(self):
                 
-        for res in resolutions:
-            res
         
-
-
+    def get_pl_by_locations(self,
+                            audio_locations,
+                            levels):
         
-
-
-def PL_to_m3u8(path_to_playlists_folder,
-               playlist,):
-    """_summary_
-
-    Args:
-        path_to_lib_folder (_type_): _description_
-        playlist (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    file_name = f"{playlist.itunesAttributes['Name']}.m3u8"
-    if file_name in os.listdir():
-        file_name = f"{playlist.itunesAttributes['Name']} -  {playlist.itunesAttributes['Playlist ID']}.m3u"
-
-    f= open(os.path.join(path_to_playlists_folder,file_name),"w+")
-    f.write(f"#EXTM3U\r\n" )
-
-    total_time_list = []
-    name_list =[]
-    artist_list = []
-    location_list =[]
-
-    for item in playlist.items:
-        #try:
-        try:
-            total_time = item.itunesAttributes['Total Time']
-        except:
-            total_time = 0
-
-        name = item.itunesAttributes['Name']
-        try:
-            artist = item.itunesAttributes['Artist']
-        except:
-            artist = None
-        location = item.itunesAttributes['Location']
-
-        total_time_list.append(total_time)
-        name_list.append(name)
-        artist_list.append(artist)
-        location_list.append(location)
-
-        f.write(f"#EXTINF:{round(int(total_time)/1000)} ,{name} - {artist}\r\n" )
-        f.write(f"{location}\r\n".replace('%20', ' ') )
-        #except:
-        #    print(item)
-
-    f.close()
-
-    df = pd.DataFrame({'Artist' : artist_list, 
-                       'Name' : name_list,
-                       'Total Time' : total_time_list,
-                       'Location' : location_list,
-                       })
-    df.loc[:,'Location'] = df.loc[:,'Location'].apply(lambda x : unquote(x)) 
-    #df.to_csv(os.parth.join(path_to_playlist,playlist_name.replace('m3u8','csv')))
-    return df
-
-
-
-
-def df_to_m3u8(df,file_name, path_to_m3u8_folder):
-    """_summary_
-
-    Args:
-        df (_type_): _description_
-        file_name (_type_): _description_
-        path_to_m3u8_folder (_type_): _description_
-    """
-
-    if not file_name.endswith('.m3u8'):
-        file_name+='.m3u8'
+        #df = get_lib_as_csv(path_to_lib_folder,lib_name)
         
-    f= open(os.path.join(path_to_m3u8_folder,file_name),"w+")
-    f.write(f"#EXTM3U\r\n" )
+        for i in range(len(audio_locations)):
 
-    for i,row in df.iterrows():
+            audio_location = audio_locations[i]
+            level = levels[i]
 
-        #try:
-        total_time = row['Total Time']
-        name = row['Name']
-        artist = row['Artist']
-        location = row['Location']
+            print(audio_location)
 
-        f.write(f"#EXTINF:{round(int(total_time)/1000)} ,{name} - {artist}\r\n" )
-        f.write(f"{location}\r\n".replace('%20', ' ') )
-        #except:
-        #    print(row)
-    f.close()
+            self.df_lib.dropna(subset=['Total Time'],inplace=True)
+            self.df_lib.loc[:,'Location_rep'] = self.df_lib.Location
+            self.df_lib.loc[:,'audio_loc_in_loc'] = self.df_lib.Location_rep.apply(lambda x : audio_location in x)
+            #return df
 
+            self.df_lib.loc[:,'level_max'] = np.where(self.df_lib.loc[:,'audio_loc_in_loc'],
+                self.df_lib.Location_rep.apply(lambda x : len(x.split(audio_location)[-1].split('/'))),#:min([level, 
+                                                                #                                          len(x.replace('%20',' ').split(audio_location)[1].split('/'))])]),
+                                                                0)
 
-def m3u8_to_csv(path_to_playlist,playlist_name):
-    """_summary_
+            self.df_lib.loc[:,'pl_name'] = np.where(self.df_lib.loc[:,'audio_loc_in_loc'],
+                self.df_lib.Location_rep.apply(lambda x : '_'.join(x.split(audio_location)[-1].split('/')[0:min([level+1,len(x.split(audio_location)[-1].split('/'))
+                                                                                        ])
+                                                                                        ])),#:min([level, 
+                                                                #                                          len(x.replace('%20',' ').split(audio_location)[1].split('/'))])]),
+                                                                0)
+            path_to_pl = os.path.join(self.path_to_playlists_folder,audio_location.replace('/','_' ))
 
-    Args:
-        path_to_playlist (_type_): _description_
-        playlist_name (_type_): _description_
+            if audio_location.replace('/','_' ) not in os.listdir(self.path_to_playlists_folder):
+                    os.mkdir(path_to_pl)
+                    
+            print(self.df_lib.loc[:,'pl_name'].unique())
 
-    Returns:
-        _type_: _description_
-    """
-
-    file1 = open(os.parth.join(path_to_playlist,playlist_name), 'r')
-    count = 0
-    
-    # Using for loop
-    print("Using for loop")
-    duration_list = []
-    title_list = []
-    artist_list = []
-    location_list = []  
-
-    for line in file1:
-    
-        line_strip = line.strip()
-        if line_strip.startswith('#EXTINF:'):
-
-            line_strip = line_strip.replace('#EXTINF:','')       
-            duration = line_strip.split(',')[0]
-            line_strip = line_strip.replace(f'{duration},','')
-            title = line_strip.split(' - ')[0] 
-            artist = line_strip.split(' - ')[1] 
-
-            count += 1
-            print(duration,title,artist)
-            duration_list.append(duration)
-            title_list.append(title)
-            artist_list.append(artist)
-        elif not line_strip.startswith('#EXT'):
-            location = line.strip()
-            print(location.replace(' ','%20'))
-            location_list.append(location)
-
-    
-    # Closing files
-    file1.close()
-
-    df = pd.DataFrame({'Artist' : artist_list, 
-                       'Title' : title_list,
-                       'Duration' : duration_list,
-                       'Location' : location_list,
-                       })
-    
-    df.loc[:,'Location'] = df.loc[:,'Location'].apply(lambda x : unquote(x)) 
-    df.to_csv(os.parth.join(path_to_playlist,playlist_name.replace('m3u8','csv')))
-
-    return df
-
-
-
-def get_pl_by_locations(path_to_lib_folder,
-                        lib_name,
-                        audio_locations,
-                        levels):
-    
-    df = get_lib_as_csv(path_to_lib_folder,lib_name)
-     
-    for i in range(len(audio_locations)):
-
-        audio_location = audio_locations[i]
-        level = levels[i]
-
-        print(audio_location)
-
-        df.dropna(subset=['Total Time'],inplace=True)
-        df.loc[:,'Location_rep'] = df.Location
-        df.loc[:,'audio_loc_in_loc'] = df.Location_rep.apply(lambda x : audio_location in x)
-        #return df
-
-        df.loc[:,'level_max'] = np.where(df.loc[:,'audio_loc_in_loc'],
-            df.Location_rep.apply(lambda x : len(x.split(audio_location)[-1].split('/'))),#:min([level, 
-                                                            #                                          len(x.replace('%20',' ').split(audio_location)[1].split('/'))])]),
-                                                            0)
-
-        df.loc[:,'pl_name'] = np.where(df.loc[:,'audio_loc_in_loc'],
-            df.Location_rep.apply(lambda x : '_'.join(x.split(audio_location)[-1].split('/')[0:min([level+1,len(x.split(audio_location)[-1].split('/'))
-                                                                                    ])
-                                                                                    ])),#:min([level, 
-                                                            #                                          len(x.replace('%20',' ').split(audio_location)[1].split('/'))])]),
-                                                            0)
-        path_to_pl = os.path.join(path_to_lib_folder,audio_location.replace('/','_' ))
-
-        if audio_location.replace('/','_' ) not in os.listdir(path_to_lib_folder):
-                os.mkdir(path_to_pl)
-                
-        print(df.loc[:,'pl_name'].unique())
-
-        for pl_name in df.loc[:,'pl_name'].unique():
-            if pl_name!=0:
-                print(pl_name.replace(' ','_'))
-                if len(df[df.pl_name == pl_name])>1:
-                    df_to_m3u8(df[df.pl_name == pl_name],
-                            pl_name.replace(' ','_'), 
-                            path_to_pl)
+            for pl_name in self.df_lib.loc[:,'pl_name'].unique():
+                if pl_name!=0:
+                    print(pl_name.replace(' ','_'))
+                    if len(self.df_lib[self.df_lib.pl_name == pl_name])>1:
+                        df_to_m3u8(self.df_lib[self.df_lib.pl_name == pl_name],
+                                pl_name.replace(' ','_'), 
+                                path_to_pl)
